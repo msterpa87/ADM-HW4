@@ -5,7 +5,19 @@ import re
 # constants
 word_length = 128
 bin_str_length = 32
-buckets_bits = 4
+buckets_bits = 6
+
+
+def rho(s):
+	"""
+	Returns the 1-indexed position of the first 1 from the left
+	:param s: binary string
+	:return: int
+	"""
+	try:
+		return s.index('1') + 1
+	except ValueError:
+		return 1
 
 
 def get_alpha(m):
@@ -29,20 +41,7 @@ def harmonic_mean(v):
 	:param v: vector of ints
 	:return: int
 	"""
-	return len(v)/sum([1/(2**x) for x in v])
-
-
-def trail_zeroes(string):
-	"""
-
-	:param string:
-	:return:
-	"""
-	m = re.match(r'^(0+)', string)
-	if m is None:
-		return 0
-	else:
-		return len(m[0])
+	return 1/sum([2**(-x) for x in v])
 
 
 def get_hash(bin_str_length=bin_str_length, word_length=word_length):
@@ -76,27 +75,30 @@ class HyperLogLog(object):
 		self.buckets_bits = buckets_bits
 		self.num_buckets = 2**buckets_bits
 		self.buckets = [0] * self.num_buckets
+		self.h = get_hash()
 
 		# first bits of hash will be used as bucket number
 		# self.num_bins = bin_str_length - buckets_bits
 
-	def add(self, x):
+	def add(self, s):
 		"""
 		adds x to the HLL structure
 
-		:param x: binary string
+		:param x: string
 		:return: None
 		"""
+		x = int(s, 16)
+		x = self.h(x)
 		i = int(x[:self.buckets_bits], 2) - 1  # bucket number
-		zeroes = trail_zeroes(x[self.buckets_bits:])  # trailing zeroes
+		pos = rho(x[self.buckets_bits:])  # 1-indexed position of first 1 from left
 
 		# update bucket
-		self.buckets[i] = max(zeroes, self.buckets[i])
+		self.buckets[i] = max(pos, self.buckets[i])
 
-	def count(self):
+	def __len__(self):
 		alpha = get_alpha(self.num_buckets)
 		m = self.num_buckets
 		avg = harmonic_mean(self.buckets)
 
-		return int(alpha * m * avg)
+		return int(alpha * m**2 * avg)
 
