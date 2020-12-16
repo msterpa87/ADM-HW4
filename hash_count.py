@@ -1,4 +1,4 @@
-from hyperloglog2 import *
+from my_hyperloglog import *
 import hyperloglog
 import sys
 

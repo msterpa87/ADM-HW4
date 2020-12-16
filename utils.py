@@ -12,9 +12,9 @@ import pickle
 import matplotlib.pyplot as plt
 import time
 
-
-reviews_pathname = 'reviews/Reviews.csv'
-processed_reviews_pathname = 'reviews/processed_reviews.csv'
+tfidf_filename = "tfidf.pkl"
+svd_filename = "svd.pkl"
+data_filename = "data.pkl"
 
 
 def preprocess(s, decontract=True, remove_html=True, punctuation=True, stemming=True):
@@ -57,23 +57,31 @@ def preprocess(s, decontract=True, remove_html=True, punctuation=True, stemming=
 
 
 class Vectorizer(object):
-    def __init__(self, min_df=0.1, max_df=0.9, max_features=100, n_components=20, save=True):
+    def __init__(self, max_features=100, n_components=20, save=True):
         self.save = save
         self.n_components = n_components
-        self.max_df = max_df
         self.max_features = max_features
-        self.min_df = min_df
-        self.variance_ = None
+        self.tfidf = None
+        self.svd = None
+        self.data = None
 
-    def reviews_to_vectors(self, reviews):
+    def load_from_file(self):
+        self.tfidf = pickle.load(open(tfidf_filename, "rb"))
+        self.svd = pickle.load(open(svd_filename, "rb"))
+        self.data = pickle.load(open(data_filename, "rb"))
+
+    def save_to_file(self):
+        pickle.dump(self.tfidf, open(tfidf_filename, "wb"))
+        pickle.dump(self.svd, open(svd_filename, "wb"))
+        pickle.dump(self.data, open(data_filename, "wb"))
+
+    def fit_transform(self, reviews):
         """
         Returns a matrix of tfidf with reduced dimensions
         :param reviews: a list of strings representing a user review
         :return: a sparse matrix, each row represents the tfidf of the input text
         """
         tfidf = TfidfVectorizer(
-            min_df=self.min_df,
-            max_df=self.max_df,
             max_features=self.max_features,
             stop_words='english'
         )
@@ -88,75 +96,113 @@ class Vectorizer(object):
         data = svd.fit_transform(reviews_tfidf)
 
         if self.save:
-            pickle.dump(data, open("tfidf_matrix.pkl", "wb"))
-
-        self.variance_ = svd.explained_variance_
+            # saving pickles for future loading
+            self.svd = svd
+            self.tfidf = tfidf
+            self.data = data
+            self.save_to_file()
 
         return data
 
+    def get_feature_names(self):
+        return self.tfidf.get_feature_names()
 
-def distance(point, centroids):
-    """
+    def get_components(self):
+        return self.svd.components_
 
-    :param centroids: vector of dimensione (1,d)
-    :param point: vector of dimension (k,d)
-    :return: vector of floats of dimension d
+    def get_variance(self):
+        return self.svd.explained_variance_
+
+
+def distance(points, centroids):
+    """ Returns the vector of distances of points to respective centroids
+
+    Parameters
+    ----------
+    points : numpy (n, 1, d)
+    centroids : numpy (1, k, d)
+        centroids[i] = closest centroid to point[i]
+    Returns
+    -------
+    distances : numpy (n, d)
+        the vector of distance of each point from its centroid
     """
-    return ((point - centroids) ** 2).sum(axis=1)
+    return ((points - centroids) ** 2).sum(axis=points.ndim - 1)
 
 
 def get_closest(point, centroids):
     """
 
-    :param point: vector of dim (1,d)
-    :param centroids: vector of dim (k,d)
-    :return: index of the centroid closest to point
+    :param point: vector of dim (n, 1, d)
+    :param centroids: vector of dim (1, k,d)
+    :return: indices of the centroids closest to each point
     """
-    return distance(point, centroids).argmin()
+    return distance(point, centroids).argmin(axis=1)
 
 
 def average(points):
-    """
-
-    :param points:
-    :return:
-    """
+    """ Average point of the given set of points """
     return np.average(points, axis=0)
 
 
-def compute_sse(points, centroids, assigned_centroids):
-    """
-
-    :param assigned_centroids:
-    :param points:
-    :param centroids:
-    :return:
-    """
-    return distance(points, centroids[assigned_centroids]).sum() / len(points)
+def compute_sse(points, centroids):
+    return distance(points, centroids).sum()
 
 
 def update_centroids(points, clusters, n_centroids):
-    """
-
-    :param n_centroids:
-    :param points:
-    :param clusters:
-    :return:
-    """
-    return np.array([average(points[clusters == i]) for i in range(n_centroids)])
+    return np.array([(points[clusters == i]).mean(axis=0) for i in range(n_centroids)])
 
 
 def clusters_size(clusters):
     return np.unique(clusters, return_counts=True)[1]
 
 
+def sharding_init(data, n_centroids):
+    """ Returns k centroids from data using the naive sharding
+        https://www.kdnuggets.com/2017/03/naive-sharding-centroid-initialization-method.html
+
+    Parameters
+    ----------
+    data : numpy (n, d)
+    n_centroids : int
+
+    Returns
+    -------
+    centroids
+        numpy (k, d)
+    """
+    sharding_idxs = data.sum(axis=1).argsort()
+    chunks = np.array_split(data[sharding_idxs], n_centroids, axis=0)
+    centroids = [chunks[i].mean(axis=0) for i in range(n_centroids)]
+
+    return np.array(centroids)
+
+
+def random_init(points, n_centroids):
+    random_indices = np.random.choice(range(len(points)), n_centroids, replace=False)
+
+    return points[random_indices]
+
+
 class CustomKMeans(object):
-    def __init__(self, n_centroids=10, max_iter=100):
+    def __init__(self, n_centroids=10, max_iter=100, init='random', threshold_pct=0.001):
+        """
+        Parameters
+        ----------
+        n_centroids : int
+        max_iter : int
+        init : ['random', 'sharding']
+        """
         self.n_centroids = n_centroids
         self.max_iter = max_iter
-        self.sse_list_ = []
-        self.total_time_ = None
-        self.iter_time_ = None
+        self.n_iter_ = 0
+        self.inertia_ = []  # will contain the sum of squares error of each iteration
+        self.threshold_pct = threshold_pct
+
+        if init == 'random':
+            self.init = random_init
+        elif init == 'sharding':
+            self.init = sharding_init
 
     def predict(self, points):
         tic = time.time()
@@ -167,26 +213,27 @@ class CustomKMeans(object):
         n_centroids = self.n_centroids
         max_iter = self.max_iter
 
-        # initialize random centroids
-        random_indices = np.random.choice(range(n_points), n_centroids, replace=False)
-        centroids = points[random_indices]
+        # initialize centroids
+        centroids = self.init(points, n_centroids)
+
+        last_sse = 0
 
         for i in range(max_iter):
-
             # get cluster assignement for each point
-            assigned_centroids = np.array([get_closest(point, centroids) for point in points])
+            assigned_centroids = get_closest(points[:, None, :], centroids[None, :, :])
 
             # update centroids taking average point
             centroids = update_centroids(points, assigned_centroids, n_centroids)
 
             # computer squared error
-            self.sse_list_.append(compute_sse(points, centroids, assigned_centroids))
+            current_sse = int(compute_sse(points, centroids[assigned_centroids]))
+            if (abs(last_sse - current_sse) / current_sse) < self.threshold_pct:
+                self.n_iter_ = i + 1
+                break
+            last_sse = current_sse
 
-        toc = time.time()
+        self.inertia_ = compute_sse(points, centroids[assigned_centroids])
 
-        total = toc - tic
-        self.total_time_ = total
-        self.iter_time_ = total / max_iter
         return assigned_centroids
 
 
@@ -200,17 +247,6 @@ def cluster_as_text(reviews_df, cluster_num, cluster_col='Cluster', text_col='Te
     :return: string
     """
     return " ".join(reviews_df[reviews_df[cluster_col] == cluster_num][text_col].astype(str).tolist())
-
-
-def load_reviews(filename=reviews_pathname, clusters=None):
-    cols = ['ProductId', 'UserId', 'Score', 'Text']
-    reviews_df = pd.read_csv(reviews_pathname, usecols=cols)
-    reviews_df['Text'] = reviews_df['Text'].apply(lambda x: preprocess(x, stemming=False))
-
-    if clusters is not None:
-        reviews_df['Cluster'] = clusters
-
-    return reviews_df
 
 
 class ReviewsWordCloud(object):
@@ -230,7 +266,7 @@ class ReviewsWordCloud(object):
         :param cluster_num:
         :return:
         """
-        assert(cluster_num < self.num_cluster)
+        assert (cluster_num < self.num_cluster)
 
         wordcloud = WordCloud(stopwords=STOPWORDS,
                               max_words=max_words,
@@ -241,3 +277,4 @@ class ReviewsWordCloud(object):
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis('off')
         plt.show()
+
