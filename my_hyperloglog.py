@@ -51,11 +51,14 @@ def get_hash(bin_str_length=bin_str_length, word_length=word_length):
 	:param word_length:
 	:return:
 	"""
-	num_bins = 2 ** bin_str_length
 	max_a = 2 ** word_length
-	max_b = 2**(word_length - bin_str_length)
+	max_b = 2 ** (word_length - bin_str_length)
 	max_hash_length = word_length - bin_str_length
-	a = randint(1, max_a-1)
+
+	a = randint(2, max_a-1)
+	if a % 2 == 0:  # a must be an odd integer
+		a -= 1
+
 	b = randint(1, max_b-1)
 
 	def custom_hash(x):
@@ -64,7 +67,7 @@ def get_hash(bin_str_length=bin_str_length, word_length=word_length):
 		:param x: int
 		:return: binary string
 		"""
-		bin_str = bin(((a * x + b) % max_a) >> (word_length - bin_str_length))[2:]
+		bin_str = bin(((a * x + b) % max_a) >> max_hash_length)[2:]
 		return "0" * (bin_str_length - len(bin_str)) + bin_str
 
 	return custom_hash
@@ -75,21 +78,21 @@ class HyperLogLog(object):
 		self.buckets_bits = buckets_bits
 		self.num_buckets = 2**buckets_bits
 		self.buckets = [0] * self.num_buckets
-		self.h = get_hash()
+		self.h = get_hash(bin_str_length=bin_str_length)
 
 		# first bits of hash will be used as bucket number
 		# self.num_bins = bin_str_length - buckets_bits
 
 	def add(self, s):
 		"""
-		adds x to the HLL structure
+		adds s to the HLL structure
 
-		:param x: string
+		:param s: string
 		:return: None
 		"""
 		x = int(s, 16)
 		x = self.h(x)
-		i = int(x[:self.buckets_bits], 2) - 1  # bucket number
+		i = int(x[:self.buckets_bits], 2) - 1  # bucket index
 		pos = rho(x[self.buckets_bits:])  # 1-indexed position of first 1 from left
 
 		# update bucket
@@ -102,3 +105,20 @@ class HyperLogLog(object):
 
 		return int(alpha * m**2 * avg)
 
+
+def estimate_distinct(filename):
+	"""
+	Computes an estimate of the distinct elements of the
+	multiset represented as line in filename
+	:param filename: string
+	:return: int
+	"""
+	filename = "hash.txt"
+	hll = HyperLogLog()
+
+	with open(filename, "r") as f:
+		for line in f:
+			line = line.strip()
+			hll.add(line)
+
+	return len(hll)
