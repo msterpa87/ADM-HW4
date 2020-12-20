@@ -1,7 +1,4 @@
-from sklearn.decomposition import TruncatedSVD
-import numpy as np
-import matplotlib.pyplot as plt
-from kmeans import CustomKMeans
+from kmeans import *
 import pickle
 
 plt.style.use("seaborn-whitegrid")
@@ -20,14 +17,24 @@ def plot_variance(tfidf):
         variance_list.append(variance)
 
     components = np.arange(2, len(variance_list) + 2)
-    x = np.where(np.array(variance_list) > 0.6)[0][0] + 1
-    y = variance_list[x]
+    variance_list = np.array(variance_list)
+    x_below_idx = variance_list < 0.6
+    x_above_idx = variance_list >= 0.6
+
+    x_below = np.where(x_below_idx)[0]
+    x_above = np.where(x_above_idx)[0]
+
+    y_below = variance_list[x_below]
+    y_above = variance_list[x_above]
 
     fig, ax = plt.subplots()
-    ax.scatter(components, variance_list, marker='.')
+    ax.scatter(x_below + 2, y_below, marker='o')
+    ax.scatter(x_above + 2, y_above, marker='o', color='red')
+    ax.set_xticks(components)
     ax.axhline(0.6, linestyle='--', linewidth=1, color='red')
     ax.set(xlabel="Number of Components",
-           ylabel="Variance")
+           ylabel="Variance",
+           title="Explained Variance after SVD")
 
 
 def kmeans_simulation(points, max_centroids=20, max_iter=50, init='random'):
