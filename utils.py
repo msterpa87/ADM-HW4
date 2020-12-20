@@ -122,7 +122,6 @@ def get_closest(points, centroids):
     return ((points[:, None, :] - centroids[None, :, :])**2).sum(axis=2).argmin(axis=1)
 
 
-
 def average(points):
     """ Average point of the given set of points """
     return np.average(points, axis=0)

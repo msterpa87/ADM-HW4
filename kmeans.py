@@ -1,5 +1,6 @@
 from utils import *
 import numpy as np
+import time
 
 
 def get_tfidf(reviews):
@@ -29,18 +30,14 @@ class CustomKMeans(object):
         self.max_iter = max_iter
         self.n_iter_ = 0
         self.inertia_ = 0  # will contain the sum of squares error of each iteration
-        self.distortion_ = 0
         self.threshold_pct = threshold_pct
-        self.time = 0
 
         if init == 'random':
             self.init = random_init
         elif init == 'sharding':
             self.init = sharding_init
 
-    def predict(self, points):
-        tic = time.time()
-
+    def fit_predict(self, points):
         # cluster assignment
         n_points = len(points)
         centroids_labels = np.zeros(n_points, dtype=int)
@@ -68,10 +65,5 @@ class CustomKMeans(object):
             last_sse = current_sse
 
         self.inertia_ = last_sse
-        self.distortion_ = compute_distortion(points, clusters_centers[centroids_labels])
-
-        toc = time.time()
-
-        self.time = toc - tic
 
         return centroids_labels
