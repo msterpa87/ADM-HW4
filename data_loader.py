@@ -1,7 +1,7 @@
 import pandas as pd
 from utils import preprocess
 
-reviews_pathname = 'reviews/Reviews.csv'
+reviews_pathname = 'Reviews.csv'
 processed_col = 'ProcessedText'
 
 
@@ -24,7 +24,6 @@ def load_data(processed=False):
 
         if processed_col not in reviews_df.columns:
             reviews_df[processed_col] = reviews_df['Text'].apply(preprocess).astype('U')
-
 
             # save for future loading
             reviews_df.to_csv(reviews_pathname)

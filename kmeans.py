@@ -1,10 +1,9 @@
 from utils import *
 import numpy as np
-import time
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 def get_tfidf(reviews):
-    from sklearn.feature_extraction.text import TfidfVectorizer
 
     tfidf = TfidfVectorizer(
         max_features=1000,
@@ -16,7 +15,7 @@ def get_tfidf(reviews):
 
 
 class CustomKMeans(object):
-    def __init__(self, n_clusters=2, max_iter=100, init='random', threshold_pct=1e-3):
+    def __init__(self, n_clusters=2, max_iter=100, init='random', threshold_pct=None):
         """
         Parameters
         ----------
@@ -47,8 +46,6 @@ class CustomKMeans(object):
         # initialize clusters_centers
         clusters_centers = self.init(points, n_clusters)
 
-        last_sse = 0
-
         for i in range(max_iter):
             # get cluster assignment for each point
             centroids_labels = get_closest(points, clusters_centers)
@@ -56,14 +53,6 @@ class CustomKMeans(object):
             # update clusters_centers taking average point
             clusters_centers = update_centroids(points, centroids_labels)
 
-            # compute squared error
-            current_sse = int(compute_sse(points, clusters_centers[centroids_labels]))
-            if (abs(last_sse - current_sse) / current_sse) < self.threshold_pct:
-                self.n_iter_ = i + 1
-                break
-
-            last_sse = current_sse
-
-        self.inertia_ = last_sse
+        self.inertia_ = int(compute_sse(points, clusters_centers[centroids_labels]))
 
         return centroids_labels
