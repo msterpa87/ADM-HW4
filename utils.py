@@ -3,6 +3,7 @@ from sklearn.decomposition import TruncatedSVD
 import numpy as np
 from wordcloud import WordCloud, STOPWORDS
 from nltk.stem import PorterStemmer
+from scipy.stats import f_oneway
 import re
 import string
 import matplotlib.pyplot as plt
@@ -183,6 +184,27 @@ def cluster_as_text(reviews_df, cluster_num, cluster_col='Cluster', text_col='Te
     """
     return " ".join(reviews_df[reviews_df[cluster_col] == cluster_num][text_col].astype(str).tolist())
 
+
+def product_count(df):
+    cols = ['ProductId', 'Cluster']
+    products_df = df[cols].groupby(['Cluster']).count()
+    products_df.rename(columns={'ProductId': 'Number of Products'})
+    return products_df
+
+
+def unique_users(df):
+    cols = ['UserId', 'Cluster']
+    users_df = df[cols].groupby(['Cluster']).agg({"UserId": "nunique"})
+    users_df.rename(columns={'UserId': 'Unique Users'})
+    return users_df
+
+
+def anova(df):
+    n = df['Cluster'].max() + 1
+    groups = [df[df['Cluster'] == i]['Score'].values for i in range(n)]
+    normalized_groups = list(map(lambda x: (x - x.mean()) / x.std(), groups))
+    f, p = f_oneway(*normalized_groups)
+    
 
 class ReviewsWordCloud(object):
     def __init__(self, reviews_df, text_col='Text', cluster_col='Cluster'):
