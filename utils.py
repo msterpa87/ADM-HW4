@@ -10,14 +10,17 @@ import warnings
 from collections import Counter
 warnings.filterwarnings("ignore")
 
+# constants
 tfidf_filename = "tfidf.pkl"
 svd_filename = "svd.pkl"
 data_filename = "data.pkl"
-reviews_pathname = 'processed_reviews.csv'
-processed_col = 'ProcessedText'
+reviews_pathname = "processed_reviews.csv"
+processed_col = "ProcessedText"
 no_stem_col = "Text_not_stemmed"
+cluster_col = "Cluster"
 stopwords = stopwords.words('english')
 
+# user defined words to remove from WordCloud
 special_words = ['amazon', 'review', 'something', 'thing', 'buy',
                  'price', 'prices', 'year', 'years','order', 'value',
                  'product', 'years', 'great', 'try', 'purchase',
@@ -28,6 +31,7 @@ special_words = ['amazon', 'review', 'something', 'thing', 'buy',
 
 
 def load_data(processed=False):
+    """ Data loader of processed_reviews.csv """
     cols = ['ProductId', 'UserId', 'Score', 'Text']
     reviews_df = pd.read_csv(reviews_pathname)
 
@@ -38,17 +42,15 @@ def load_data(processed=False):
 
 
 def is_not_noun(tag):
+    """ Returns true iff the NLTK tag is a noun """
     if tag[0] == 'N':
         return False
     return True
 
 
-def get_word_freq(df, word):
-    freq = len(df[df[no_stem_col].str.contains(word)]) / len(df)
-    print("Reviews containing 'product': {:.2%}".format(freq))
-
-
 def words_to_filter(str_list):
+    """ Takes a list of reviews and returns a list of stemmed words
+        including non-nouns and short words. """
     vocabulary = list(set(words_from_str_list(str_list)))
     tags = nltk.pos_tag(vocabulary)
     to_filter = filter(lambda x: is_not_noun(x[1]) or len(x[0]) < 3, tags)
@@ -60,6 +62,7 @@ def words_to_filter(str_list):
 
 
 def preprocess(s, stemming=True):
+    """ Takes a string s and runs a standard preprocessing """
     s = s.lower()
 
     # remove html tags
@@ -71,6 +74,7 @@ def preprocess(s, stemming=True):
     # removing digits and special chars
     tokens = list(filter(lambda x: x not in stopwords, s.split()))
 
+    # stemming with SnowballStemmer worked slightly better than Porter and WordNet
     if stemming:
         stemmer = SnowballStemmer("english")
         s = " ".join([stemmer.stem(w) for w in tokens])
@@ -81,6 +85,7 @@ def preprocess(s, stemming=True):
 
 
 def words_from_str_list(str_list):
+    """ Shortcut to join a reviews list as a single string """
     return " ".join(str_list).split()
 
 
@@ -93,16 +98,19 @@ def get_counter(df):
     return counter
 
 
-def cluster_text_as_dict(reviews_df, cluster_num, cluster_col='Cluster', text_col=no_stem_col):
-    """
+def cluster_text_as_dict(reviews_df, cluster_num):
+    """ Returns a dictionary of words to be used in the WordCloud representation
 
-    :param cluster_col:
-    :param text_col:
-    :param reviews_df: dataframe with column 'Cluster' and 'ProcessedText'
-    :param cluster_num: cluster number to return as text
-    :return: string
+    Parameters
+    ----------
+    reviews_df : dataframe with column 'Cluster' and 'ProcessedText'
+    cluster_num : cluster number to return as text
+
+    Returns
+    -------
+    dict {word: frequency}
     """
-    reviews_list = reviews_df[reviews_df['Cluster'] == cluster_num]['Text']
+    reviews_list = reviews_df[reviews_df[cluster_col] == cluster_num]['Text']
     tfidf = TfidfVectorizer(stop_words='english', max_df=0.8, max_features=300).fit(reviews_list)
     top_features = tfidf.get_feature_names()
     words = preprocess(" ".join(reviews_list), stemming=False).split()
@@ -122,22 +130,29 @@ def cluster_text_as_dict(reviews_df, cluster_num, cluster_col='Cluster', text_co
 
 
 def product_count(df):
-    cols = ['ProductId', 'Cluster']
-    products_df = df[cols].groupby(['Cluster']).count()
+    """ Prints the number of products per cluster
+
+    Parameters
+    ----------
+    df : a DataFrame with columns 'ProductId' and 'Cluster'
+    """
+    cols = ['ProductId', cluster_col]
+    products_df = df[cols].groupby([cluster_col]).count()
     products_df.rename(columns={'ProductId': 'Number of Products'})
     return products_df
 
 
 def unique_users(df):
-    cols = ['UserId', 'Cluster']
-    users_df = df[cols].groupby(['Cluster']).agg({"UserId": "nunique"})
+    """ Prints the number of unique users per cluster
+
+    Parameters
+    ----------
+    df : a DataFrame with columns 'ProductId' and 'Cluster'
+    """
+    cols = ['UserId', cluster_col]
+    users_df = df[cols].groupby([cluster_col]).agg({"UserId": "nunique"})
     users_df.rename(columns={'UserId': 'Unique Users'})
     return users_df
 
 
-def anova(df):
-    n = df['Cluster'].max() + 1
-    groups = [df[df['Cluster'] == i]['Score'].values for i in range(n)]
-    normalized_groups = list(map(lambda x: (x - x.mean()) / x.std(), groups))
-    f, p = f_oneway(*normalized_groups)
 

@@ -3,28 +3,12 @@ from numpy.linalg import norm
 
 
 def distance(points, centroids):
-    """ Returns the vector of distances of points to respective centroids
-
-    Parameters
-    ----------
-    points : numpy (n, 1, d)
-    centroids : numpy (1, k, d)
-        centroids[i] = closest centroid to point[i]
-    Returns
-    -------
-    distances : numpy of dim n
-        the vector of distance of each point from its centroid
-    """
+    """ Returns the vector of distances of points to respective centroids """
     return ((points - centroids) ** 2).sum(axis=1)
 
 
 def get_closest(points, centroids):
-    """
-
-    :param points: vector of dim (n, 1, d)
-    :param centroids: vector of dim (1, k, d)
-    :return: indices of the centroids closest to each point
-    """
+    """ Returns the index of the closest centroid for each point """
     return ((points[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
 
 
@@ -34,33 +18,19 @@ def average(points):
 
 
 def compute_sse(points, centroids):
-    """
-
-    Parameters
-    ----------
-    points : numpy of dim (n, d)
-    centroids : numpy of dim (n, d)
-        centroids[i] = centroid of points[i]
-    Returns
-    -------
-        float : sum of squares error
-    """
+    """ Computes the sum of squares error """
     return distance(points, centroids).sum()
 
 
 def update_centroids(points, clusters, n_centroids):
+    """ Computes the new centroids of the clusters given in input """
     x = np.array([(points[clusters == i]).mean(axis=0) for i in range(n_centroids)])
     return np.nan_to_num(x)
-
-
-def clusters_size(clusters):
-    return np.unique(clusters, return_counts=True)[1]
 
 
 def random_init(points, n_clusters):
     """ Assign centroids by randomly sampling among points """
     random_indices = np.random.choice(range(len(points)), n_clusters, replace=False)
-
     return points[random_indices]
 
 
@@ -69,8 +39,9 @@ class CustomKMeans(object):
         """
         Parameters
         ----------
-        n_clusters : int
-        max_iter : int
+        n_clusters : int - number of clusters
+        max_iter : int - maximum number of iterations
+        tol : float - tolerance threshold for convergence
         """
         self.n_clusters = n_clusters
         self.max_iter = max_iter
@@ -79,8 +50,10 @@ class CustomKMeans(object):
         self.tol = tol
 
     def fit(self, points):
+        """ Runs KMeans on points and saves the result on the instance variables"""
         # cluster assignment
         n_points = len(points)
+
         centroids_labels = np.zeros(n_points, dtype=int)
         n_clusters = self.n_clusters
         max_iter = self.max_iter
@@ -88,6 +61,7 @@ class CustomKMeans(object):
         # initialize clusters_centers
         centroids = random_init(points, n_clusters)
 
+        # keep track of previous iterations
         last_centroids = centroids
         best_sse = np.inf
         best_centroids = last_centroids
@@ -106,7 +80,7 @@ class CustomKMeans(object):
                 best_centroids = centroids
 
             # convergence criteria using Frobenius norm
-            center_shift = ((centroids - last_centroids) ** 2).sum()
+            center_shift = norm(centroids - last_centroids)
             if center_shift < self.tol:
                 break
             last_centroids = centroids

@@ -1,7 +1,4 @@
-from math import log
-from random import seed, randint
-import re
-import numpy as np
+from random import randint
 
 # The following implementation of HyperLogLog follows the algorithm
 # outlined at page 4 https://hal.archives-ouvertes.fr/hal-00406166/
@@ -14,11 +11,7 @@ primes = {32: int((2 ** 64 + 1) / 274177), 64: 2**127-1}
 
 
 def rho(s):
-	"""
-	Returns the 1-indexed position of the first 1 from the left
-	:param s: binary string
-	:return: int
-	"""
+	""" Returns the index of the first of from the left """
 	try:
 		return s.index('1') + 1
 	except ValueError:
@@ -37,11 +30,11 @@ def get_alpha(m):
 
 def harmonic_mean(v):
 	""" Computes the harmonic mean of vector v """
-	return len(v)/sum([2**(-x) for x in v])
+	return len(v) / sum([2 ** (-x) for x in v])
 
 
 def get_hash_modular(bin_str_length=bin_str_length):
-	"""
+	""" Instantiate random parameters and returns a hash function
 
 	Parameters
 	----------
@@ -82,37 +75,6 @@ def get_hash_modular(bin_str_length=bin_str_length):
 	return custom_hash
 
 
-def get_hash(bin_str_length=bin_str_length, word_length=word_length):
-	"""
-
-	:param bin_str_length:
-	:param word_length:
-	:return:
-	"""
-	seed(0)
-
-	max_a = 2 ** word_length
-	max_b = 2 ** (word_length - bin_str_length)
-	max_hash_length = word_length - bin_str_length
-
-	a = randint(2, max_a-1)
-	if a % 2 == 0:  # a must be an odd integer
-		a -= 1
-
-	b = randint(1, max_b-1)
-
-	def custom_hash(x):
-		"""
-
-		:param x: int
-		:return: binary string
-		"""
-		bin_str = bin(((a * x + b) % max_a) >> max_hash_length)[2:]
-		return "0" * (bin_str_length - len(bin_str)) + bin_str
-
-	return custom_hash
-
-
 class HyperLogLog(object):
 	def __init__(self, bin_str_length=bin_str_length, buckets_bits=buckets_bits):
 		self.buckets_bits = buckets_bits
@@ -124,12 +86,7 @@ class HyperLogLog(object):
 		# self.num_bins = bin_str_length - buckets_bits
 
 	def add(self, s):
-		"""
-		adds s to the HLL structure
-
-		:param s: string
-		:return: None
-		"""
+		""" Adds string s to the HLL structure """
 		x = int(s, 16)
 		x = self.h(x)
 		i = int(x[:self.buckets_bits], 2) - 1  # bucket index
@@ -139,6 +96,7 @@ class HyperLogLog(object):
 		self.buckets[i] = max(pos, self.buckets[i])
 
 	def __len__(self):
+		""" Returns the number of elements in the structure """
 		alpha = get_alpha(self.num_buckets)
 		m = self.num_buckets
 		avg = harmonic_mean(self.buckets)
@@ -147,13 +105,7 @@ class HyperLogLog(object):
 
 
 def relative_accuracy(estimate, true_value=139000000):
-	"""
-	Returns the relative accuracy given the estimate
-
-	:param true_value: int, the true number of distinct elements
-	:param estimate: int, the estimated number of distinct elements
-	:return: float
-	"""
+	""" Returns the relative accuracy given the estimate """
 	abs_error = abs(true_value - estimate)
 	return abs_error / true_value
 
