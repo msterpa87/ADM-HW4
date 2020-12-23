@@ -3,36 +3,42 @@ import pickle
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.decomposition import TruncatedSVD
 
 plt.style.use("seaborn-whitegrid")
 
 
-def plot_variance(tfidf):
+def plot_variance(tfidf, skip=1):
     """ Plots the variance by number of components in SVD """
-    variance_list = []
-
     n = tfidf.shape[1]
+    variance_list = []
+    components = []
 
-    for i in range(2, n):
+    for i in range(2, n, skip):
         svd = TruncatedSVD(n_components=i)
         svd.fit_transform(tfidf)
         variance = svd.explained_variance_.sum()
         variance_list.append(variance)
+        components.append(i)
 
-    components = np.arange(2, len(variance_list) + 2)
+    components = np.array(components)
     variance_list = np.array(variance_list)
+
+    with open("variance_data.pkl", "wb") as f:
+        pickle.dump([components, variance_list], f)
+
     x_below_idx = variance_list < 0.6
     x_above_idx = variance_list >= 0.6
 
-    x_below = np.where(x_below_idx)[0]
-    x_above = np.where(x_above_idx)[0]
+    x_below = components[np.where(x_below_idx)[0]]
+    x_above = components[np.where(x_above_idx)[0]]
 
-    y_below = variance_list[x_below]
-    y_above = variance_list[x_above]
+    y_below = variance_list[x_below_idx]
+    y_above = variance_list[x_above_idx]
 
     fig, ax = plt.subplots()
-    ax.scatter(x_below + 2, y_below, marker='o')
-    ax.scatter(x_above + 2, y_above, marker='o', color='red')
+    ax.scatter(x_below, y_below, marker='o')
+    ax.scatter(x_above, y_above, marker='o', color='red')
     ax.set_xticks(components)
     ax.axhline(0.6, linestyle='--', linewidth=1, color='red')
     ax.set(xlabel="Number of Components",
@@ -40,7 +46,7 @@ def plot_variance(tfidf):
            title="Explained Variance after SVD")
 
 
-def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_iter=50, init='random'):
+def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, skip=5):
     """
 
     Parameters
@@ -49,8 +55,6 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_i
     kmeans_class : a class that implements fit_predict() and has attributes n_iter_ and intertia_
                    like the sklearn implementation
     max_centroids : int
-    max_iter : int
-    init : either "random" or "sharding"
         specify how to randomize the initial centroids
 
     Returns
@@ -61,11 +65,10 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_i
     """
     kmeans_runs = {}
 
-    for k in range(2, max_centroids + 1):
+    for k in range(2, max_centroids + 1, skip):
         tic = time.time()
-        print(k, end=' ')
 
-        custom_kmeans = kmeans_class(max_iter=max_iter, n_clusters=k)
+        custom_kmeans = kmeans_class(n_clusters=k)
         custom_kmeans.fit(points)
 
         toc = time.time()
@@ -73,6 +76,8 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_i
         sse = int(custom_kmeans.inertia_)
         n_iter = custom_kmeans.n_iter_
         time_ = round(toc - tic, 2)
+
+        #print("k = {}, sse = {}".format(k, sse))
 
         kmeans_runs[k] = dict(n_iter=n_iter, sse=sse, time=time_)
 
@@ -85,17 +90,9 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_i
 def plot_sse(data):
     x = list(data.keys())
     y = np.array([d['sse'] for d in data.values()])
-    x_best = np.where((y[1:] - y[:-1]) / y[:-1] > 0)[0][0]
-    y_best = y[x_best]
-    x_best = x_best + 2  # x starts from 2
-
     fig, ax = plt.subplots()
     ax.plot(x, y, marker='o')
-    ax.plot(x_best, y_best, marker='o', color='red')
     ax.set_xticks(x)
-    ax.annotate("Best value?",
-                xy=(x_best, y_best),
-                xytext=(x_best + 0.1, y_best + 1e4))
     plt.title("SSE by Number of Clusters")
     plt.xlabel("Number of Clusters")
     plt.ylabel("Sum of Squares Error")

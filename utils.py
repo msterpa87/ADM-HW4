@@ -89,68 +89,6 @@ def get_counter(df):
     return counter
 
 
-def distance(points, centroids):
-    """ Returns the vector of distances of points to respective centroids
-
-    Parameters
-    ----------
-    points : numpy (n, 1, d)
-    centroids : numpy (1, k, d)
-        centroids[i] = closest centroid to point[i]
-    Returns
-    -------
-    distances : numpy of dim n
-        the vector of distance of each point from its centroid
-    """
-    return ((points - centroids) ** 2).sum(axis=1)
-
-
-def get_closest(points, centroids):
-    """
-
-    :param points: vector of dim (n, 1, d)
-    :param centroids: vector of dim (1, k, d)
-    :return: indices of the centroids closest to each point
-    """
-    return ((points[:, None, :] - centroids[None, :, :])**2).sum(axis=2).argmin(axis=1)
-
-
-def average(points):
-    """ Average point of the given set of points """
-    return np.average(points, axis=0)
-
-
-def compute_sse(points, centroids):
-    """
-
-    Parameters
-    ----------
-    points : numpy of dim (n, d)
-    centroids : numpy of dim (n, d)
-        centroids[i] = centroid of points[i]
-    Returns
-    -------
-        float : sum of squares error
-    """
-    return distance(points, centroids).sum()
-
-
-def update_centroids(points, clusters):
-    n_centroids = clusters.max()
-    return np.array([(points[clusters == i]).mean(axis=0) for i in range(n_centroids + 1)])
-
-
-def clusters_size(clusters):
-    return np.unique(clusters, return_counts=True)[1]
-
-
-def random_init(points, n_clusters):
-    """ Assign centroids by randomly sampling among points """
-    random_indices = np.random.choice(range(len(points)), n_clusters, replace=False)
-
-    return points[random_indices]
-
-
 def cluster_as_text(reviews_df, cluster_num, cluster_col='Cluster', text_col='Text'):
     """
 
