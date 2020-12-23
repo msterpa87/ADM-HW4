@@ -2,6 +2,7 @@ from kmeans import *
 import pickle
 import time
 import pandas as pd
+import matplotlib.pyplot as plt
 
 plt.style.use("seaborn-whitegrid")
 
@@ -62,11 +63,10 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, max_i
 
     for k in range(2, max_centroids + 1):
         tic = time.time()
+        print(k, end=' ')
 
-        custom_kmeans = kmeans_class(max_iter=max_iter,
-                                     n_clusters=k,
-                                     init=init)
-        custom_kmeans.fit_predict(points)
+        custom_kmeans = kmeans_class(max_iter=max_iter, n_clusters=k)
+        custom_kmeans.fit(points)
 
         toc = time.time()
 

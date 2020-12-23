@@ -1,100 +1,86 @@
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.decomposition import TruncatedSVD
 import numpy as np
 from wordcloud import WordCloud, STOPWORDS
-from nltk.stem import PorterStemmer
+from nltk.stem import SnowballStemmer
+from nltk.corpus import stopwords
 from scipy.stats import f_oneway
 import re
-import string
+import nltk
 import matplotlib.pyplot as plt
 import warnings
+from collections import Counter
 warnings.filterwarnings("ignore")
 
 tfidf_filename = "tfidf.pkl"
 svd_filename = "svd.pkl"
 data_filename = "data.pkl"
+reviews_pathname = 'processed_reviews.csv'
+processed_col = 'ProcessedText'
+no_stem_col = "Text_not_stemmed"
+stopwords = stopwords.words('english')
+
+special_words = ['amazon', 'review', 'something', 'thing', 'buy',
+                 'price', 'year', 'order', 'value']
 
 
-def preprocess(s, decontract=True, remove_html=True, punctuation=True, stemming=True):
-    """
+def load_data(processed=False):
+    cols = ['ProductId', 'UserId', 'Score', 'Text']
+    reviews_df = pd.read_csv(reviews_pathname)
 
-    :param s:
-    :param decontract:
-    :param remove_html:
-    :param punctuation:
-    :param stemming:
-    :return:
-    """
+    if processed:
+        cols += [processed_col, no_stem_col]
+
+    return reviews_df[cols]
+
+
+def is_not_noun(tag):
+    if tag[0] == 'N':
+        return False
+    return True
+
+
+def words_to_filter(str_list):
+    vocabulary = list(set(words_from_str_list(str_list)))
+    tags = nltk.pos_tag(vocabulary)
+    to_filter = filter(lambda x: is_not_noun(x[1]) or len(x[0]) < 3, tags)
+    to_filter = list(map(lambda x: x[0], to_filter))
+    to_filter = to_filter + special_words
+    stemmer = SnowballStemmer("english")
+    to_filter = [stemmer.stem(w) for w in to_filter]
+    return to_filter
+
+
+def preprocess(s, stemming=True):
     s = s.lower()
 
-    if decontract:
-        # expand contracted verbs
-        s = re.sub(r"\'s", " is", s)
-        s = re.sub(r"\'ll", " will", s)
-        s = re.sub(r"won\'t", "will not", s)
-        s = re.sub(r"n\'t", " not", s)
-        s = re.sub(r"\'d", " would", s)
-        s = re.sub(r"\'ve'", " have", s)
-        s = re.sub(r"\'m", " am", s)
+    # remove html tags
+    s = re.sub(r"<[^>]+>", "", s)
 
-    if remove_html:
-        # remove html tags
-        s = re.sub(r"<[^>]+>", "", s)
+    # remove punctuation
+    s = re.sub(r'[^a-zA-Z]', ' ', s)
 
-    if punctuation:
-        # removing punctuations and stemming
-        exclist = string.punctuation + string.digits
-        table_ = str.maketrans(exclist, ' ' * len(exclist))
-        s = " ".join(s.translate(table_).split())
+    # removing digits and special chars
+    tokens = list(filter(lambda x: x not in stopwords, s.split()))
 
     if stemming:
-        stemmer = PorterStemmer()
-        s = " ".join(stemmer.stem(w) for w in s.split())
+        stemmer = SnowballStemmer("english")
+        s = " ".join([stemmer.stem(w) for w in tokens])
+    else:
+        s = " ".join(tokens)
 
     return s
 
 
-class Vectorizer(object):
-    def __init__(self, max_features=100, n_components=20, min_df=0.2, save=True):
-        self.save = save
-        self.n_components = n_components
-        self.max_features = max_features
-        self.min_df = min_df
-        self.tfidf = None
-        self.svd = None
-        self.data = None
+def words_from_str_list(str_list):
+    return " ".join(str_list).split()
 
-    def fit_transform(self, reviews):
-        """
-        Returns a matrix of tfidf with reduced dimensions
-        :param reviews: a list of strings representing a user review
-        :return: a sparse matrix, each row represents the tfidf of the input text
-        """
-        tfidf = TfidfVectorizer(
-            max_features=self.max_features,
-            stop_words='english',
-            min_df=self.min_df
-        )
 
-        reviews_tfidf = tfidf.fit_transform(reviews)
-
-        # guarantees that n_components < n_features
-        n_components = min(self.n_components, reviews_tfidf.shape[1] - 1)
-
-        # dimensionality reduction
-        svd = TruncatedSVD(n_components=n_components)
-        data = svd.fit_transform(reviews_tfidf)
-
-        return data
-
-    def get_feature_names(self):
-        return self.tfidf.get_feature_names()
-
-    def get_components(self):
-        return self.svd.components_
-
-    def get_variance(self):
-        return self.svd.explained_variance_
+def get_counter(df):
+    """ Takes a df with a column ProcessedText of strings and returns
+        a Counter object on its corpus"""
+    counter = Counter()
+    words = words_from_str_list(df[processed_col])
+    counter.update(words)
+    return counter
 
 
 def distance(points, centroids):
@@ -143,10 +129,6 @@ def compute_sse(points, centroids):
     return distance(points, centroids).sum()
 
 
-def compute_distortion(points, centroids):
-    return distance(points, centroids).mean()
-
-
 def update_centroids(points, clusters):
     n_centroids = clusters.max()
     return np.array([(points[clusters == i]).mean(axis=0) for i in range(n_centroids + 1)])
@@ -154,16 +136,6 @@ def update_centroids(points, clusters):
 
 def clusters_size(clusters):
     return np.unique(clusters, return_counts=True)[1]
-
-
-def sharding_init(data, n_centroids):
-    """ Returns k centroids from data using the naive sharding
-        https://www.kdnuggets.com/2017/03/naive-sharding-centroid-initialization-method.html """
-    sharding_idxs = data.sum(axis=1).argsort()
-    chunks = np.array_split(data[sharding_idxs], n_centroids, axis=0)
-    centroids = [chunks[i].mean(axis=0) for i in range(n_centroids)]
-
-    return np.array(centroids)
 
 
 def random_init(points, n_clusters):
