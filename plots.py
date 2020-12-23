@@ -4,6 +4,8 @@ import time
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.decomposition import TruncatedSVD
+from wordcloud import WordCloud, STOPWORDS
+from utils import cluster_text_as_dict
 
 plt.style.use("seaborn-whitegrid")
 
@@ -36,7 +38,7 @@ def plot_variance(tfidf, skip=1):
     y_below = variance_list[x_below_idx]
     y_above = variance_list[x_above_idx]
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 5))
     ax.scatter(x_below, y_below, marker='o')
     ax.scatter(x_above, y_above, marker='o', color='red')
     ax.set_xticks(components)
@@ -77,8 +79,6 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, skip=
         n_iter = custom_kmeans.n_iter_
         time_ = round(toc - tic, 2)
 
-        #print("k = {}, sse = {}".format(k, sse))
-
         kmeans_runs[k] = dict(n_iter=n_iter, sse=sse, time=time_)
 
     with open("simulation_data.pkl", "wb") as f:
@@ -90,7 +90,7 @@ def kmeans_simulation(points, kmeans_class=CustomKMeans, max_centroids=20, skip=
 def plot_sse(data):
     x = list(data.keys())
     y = np.array([d['sse'] for d in data.values()])
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(x, y, marker='o')
     ax.set_xticks(x)
     plt.title("SSE by Number of Clusters")
@@ -131,3 +131,25 @@ def plot_distortion(data):
     plt.title("Distortion by Number of Clusters")
     plt.xlabel("Number of Centroids")
     plt.ylabel("Distortion")
+
+
+class ReviewsWordCloud(object):
+    def __init__(self, reviews_df, cluster_col='Cluster'):
+        self.num_cluster = reviews_df.Cluster.max() + 1
+        self.df = reviews_df
+        self.cluster_col = cluster_col
+
+    def visualize_wordcloud(self, cluster_num, max_words=50, max_font_size=50, background_color='white'):
+        word_freq_dict = cluster_text_as_dict(self.df, cluster_num, cluster_col=self.cluster_col)
+
+        wc = WordCloud(stopwords=STOPWORDS,
+                       max_words=max_words,
+                       background_color=background_color,
+                       max_font_size=max_font_size)
+
+        cloud = wc.generate_from_frequencies(word_freq_dict)
+
+        plt.figure(figsize=(10, 5))
+        plt.imshow(cloud, interpolation='bilinear')
+        plt.axis('off')
+        plt.show()

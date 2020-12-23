@@ -1,12 +1,11 @@
 import numpy as np
-from wordcloud import WordCloud, STOPWORDS
 from nltk.stem import SnowballStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 from scipy.stats import f_oneway
 import re
 import pandas as pd
 import nltk
-import matplotlib.pyplot as plt
 import warnings
 from collections import Counter
 warnings.filterwarnings("ignore")
@@ -20,7 +19,12 @@ no_stem_col = "Text_not_stemmed"
 stopwords = stopwords.words('english')
 
 special_words = ['amazon', 'review', 'something', 'thing', 'buy',
-                 'price', 'year', 'order', 'value']
+                 'price', 'prices', 'year', 'years','order', 'value',
+                 'product', 'years', 'great', 'try', 'purchase',
+                 'pay', 'brand', 'way', 'lot', 'stuff', 'time' 'get',
+                 'recommend', 'anything', 'buying', 'stores', 'bit',
+                 'subscribe', 'size', 'package', 'reviews', 'thing',
+                 'things']
 
 
 def load_data(processed=False):
@@ -89,7 +93,7 @@ def get_counter(df):
     return counter
 
 
-def cluster_as_text(reviews_df, cluster_num, cluster_col='Cluster', text_col='Text'):
+def cluster_text_as_dict(reviews_df, cluster_num, cluster_col='Cluster', text_col=no_stem_col):
     """
 
     :param cluster_col:
@@ -98,7 +102,23 @@ def cluster_as_text(reviews_df, cluster_num, cluster_col='Cluster', text_col='Te
     :param cluster_num: cluster number to return as text
     :return: string
     """
-    return " ".join(reviews_df[reviews_df[cluster_col] == cluster_num][text_col].astype(str).tolist())
+    reviews_list = reviews_df[reviews_df['Cluster'] == cluster_num]['Text']
+    tfidf = TfidfVectorizer(stop_words='english', max_df=0.8, max_features=300).fit(reviews_list)
+    top_features = tfidf.get_feature_names()
+    words = preprocess(" ".join(reviews_list), stemming=False).split()
+    tags = nltk.pos_tag(set(list(words)))
+    nouns = list(map(lambda x: x[0], filter(lambda x: x[1][0] == 'N', tags)))
+    counter = Counter()
+    counter.update(words)
+    word_freq_dict = {}
+
+    filtered_words = list(set.intersection(set(nouns), set(top_features)))
+
+    for key, val in counter.items():
+        if key in filtered_words and key not in special_words:
+            word_freq_dict[key] = val
+
+    return word_freq_dict
 
 
 def product_count(df):
@@ -120,34 +140,4 @@ def anova(df):
     groups = [df[df['Cluster'] == i]['Score'].values for i in range(n)]
     normalized_groups = list(map(lambda x: (x - x.mean()) / x.std(), groups))
     f, p = f_oneway(*normalized_groups)
-    
-
-class ReviewsWordCloud(object):
-    def __init__(self, reviews_df, text_col='Text', cluster_col='Cluster'):
-        self.num_cluster = reviews_df.Cluster.max() + 1
-
-        # saves the text content of each cluster
-        self.texts = [cluster_as_text(reviews_df, i, cluster_col=cluster_col, text_col=text_col)
-                      for i in range(self.num_cluster)]
-
-    def visualize_wordcloud(self, cluster_num, max_words=50, max_font_size=50, background_color='white'):
-        """
-
-        :param max_font_size:
-        :param background_color:
-        :param max_words:
-        :param cluster_num:
-        :return:
-        """
-        assert (cluster_num < self.num_cluster)
-
-        wordcloud = WordCloud(stopwords=STOPWORDS,
-                              max_words=max_words,
-                              background_color=background_color,
-                              max_font_size=max_font_size).generate(self.texts[cluster_num])
-
-        plt.figure()
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis('off')
-        plt.show()
 
