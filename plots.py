@@ -1,3 +1,4 @@
+from scipy.stats import ttest_ind
 from kmeans import *
 import pickle
 import time
@@ -6,7 +7,8 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import TruncatedSVD
 from wordcloud import WordCloud, STOPWORDS
 from utils import cluster_text_as_dict
-
+import seaborn as sns
+sns.set_theme(style="white")
 plt.style.use("seaborn-whitegrid")
 
 
@@ -93,7 +95,7 @@ def plot_sse(data):
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(x, y, marker='o')
     ax.set_xticks(x)
-    plt.title("SSE by Number of Clusters")
+    plt.title("SSE by Number of Clusters", fontsize=15)
     plt.xlabel("Number of Clusters")
     plt.ylabel("Sum of Squares Error")
 
@@ -106,7 +108,7 @@ def plot_sse_comparison(sklearn_data, custom_data):
     plt.plot(x, sklearn_df["sse"], marker='o')
     plt.plot(x, custom_df["sse"], marker='o')
     plt.legend(["sklearn kmeans", "custom kmeans"])
-    plt.title("Sklearn vs Custom KMeans SSE")
+    plt.title("Sklearn vs Custom KMeans SSE", fontsize=15)
     plt.xlabel("Number of Clusters")
     plt.ylabel("Sum of Squares Error")
 
@@ -119,7 +121,7 @@ def plot_performance(sklearn_data, custom_data):
     plt.plot(x, sklearn_df["time"], marker='o')
     plt.plot(x, custom_df["time"], marker='o')
     plt.legend(["sklearn kmeans", "custom kmeans"])
-    plt.title("Sklearn vs Custom KMeans (Time)")
+    plt.title("Sklearn vs Custom KMeans (Time)", fontsize=15)
     plt.xlabel("Number of Clusters")
     plt.ylabel("Time (s)")
 
@@ -128,7 +130,7 @@ def plot_distortion(data):
     x = list(data.keys())
     y = [d['distortion'] for d in data.values()]
     plt.plot(x, y)
-    plt.title("Distortion by Number of Clusters")
+    plt.title("Distortion by Number of Clusters", fontsize=15)
     plt.xlabel("Number of Centroids")
     plt.ylabel("Distortion")
 
@@ -153,3 +155,22 @@ class ReviewsWordCloud(object):
         plt.imshow(cloud, interpolation='bilinear')
         plt.axis('off')
         plt.show()
+
+
+def plot_stats(df):
+    n = df['Cluster'].max() + 1
+    test_matrix = np.zeros((n, n))
+    distr = [df[df['Cluster'] == i]['Score'] for i in range(n)]
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            _, p_value = ttest_ind(distr[i], distr[j])
+            test_matrix[i, j] = p_value
+
+    mask = np.tril(np.ones_like(test_matrix, dtype=bool))
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+    sns.set(rc={'figure.figsize': (10, 5)})
+    sns.set_theme(style="white")
+    ax = sns.heatmap(test_matrix, mask=mask, cmap=cmap, vmax=.3, center=0,
+                     square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    ax.set_title("T-test p-value Matrix", fontsize=15)
