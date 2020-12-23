@@ -4,6 +4,7 @@ from nltk.stem import SnowballStemmer
 from nltk.corpus import stopwords
 from scipy.stats import f_oneway
 import re
+import pandas as pd
 import nltk
 import matplotlib.pyplot as plt
 import warnings
@@ -38,6 +39,11 @@ def is_not_noun(tag):
     return True
 
 
+def get_word_freq(df, word):
+    freq = len(df[df[no_stem_col].str.contains(word)]) / len(df)
+    print("Reviews containing 'product': {:.2%}".format(freq))
+
+
 def words_to_filter(str_list):
     vocabulary = list(set(words_from_str_list(str_list)))
     tags = nltk.pos_tag(vocabulary)
@@ -46,7 +52,7 @@ def words_to_filter(str_list):
     to_filter = to_filter + special_words
     stemmer = SnowballStemmer("english")
     to_filter = [stemmer.stem(w) for w in to_filter]
-    return to_filter
+    return list(set(to_filter))
 
 
 def preprocess(s, stemming=True):
